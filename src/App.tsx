@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, ShoppingCart, Check, Clock, Tag, PlusCircle } from 'lucide-react'
+import { Plus, Trash2, ShoppingCart, Check, Clock, Tag, PlusCircle, Globe } from 'lucide-react'
 
 // 数据模型接口
 interface GroceryItem {
@@ -11,16 +11,143 @@ interface GroceryItem {
   updatedAt: number
 }
 
+// 语言类型定义
+type Language = 'zh' | 'en'
+
+interface Translations {
+  header: {
+    title: string
+    subtitle: string
+  }
+  stats: {
+    total: string
+    pending: string
+    completed: string
+  }
+  form: {
+    placeholder: string
+    categoryLabel: string
+    customCategoryPlaceholder: string
+    customButton: string
+  }
+  categories: {
+    western: string
+    asian: string
+    gas: string
+  }
+  list: {
+    pendingTitle: string
+    completedTitle: string
+    clearCompleted: string
+    emptyTitle: string
+    emptyMessage: string
+  }
+  time: {
+    justNow: string
+    minutesAgo: (minutes: number) => string
+    hoursAgo: (hours: number) => string
+    daysAgo: (days: number) => string
+  }
+  footer: {
+    message: string
+  }
+}
+
+// 翻译字典
+const translations: Record<Language, Translations> = {
+  zh: {
+    header: {
+      title: '家庭购物清单',
+      subtitle: '管理您的日常购物需求'
+    },
+    stats: {
+      total: '总项目',
+      pending: '待购买',
+      completed: '已完成'
+    },
+    form: {
+      placeholder: '添加购物项目，例如：牛奶、面包、西红柿...',
+      categoryLabel: '选择购买地点：',
+      customCategoryPlaceholder: '请输入自定义类别名称（如：五金店、药店）...',
+      customButton: '自定义'
+    },
+    categories: {
+      western: '洋人超市',
+      asian: '华人超市',
+      gas: '加油站'
+    },
+    list: {
+      pendingTitle: '待购买',
+      completedTitle: '已完成',
+      clearCompleted: '清除已完成项目',
+      emptyTitle: '购物清单为空',
+      emptyMessage: '添加您需要购买的物品吧！'
+    },
+    time: {
+      justNow: '刚刚',
+      minutesAgo: (minutes) => `${minutes}分钟前`,
+      hoursAgo: (hours) => `${hours}小时前`,
+      daysAgo: (days) => `${days}天前`
+    },
+    footer: {
+      message: '数据自动保存至本地存储'
+    }
+  },
+  en: {
+    header: {
+      title: 'Grocery List',
+      subtitle: 'Manage your daily shopping needs'
+    },
+    stats: {
+      total: 'Total',
+      pending: 'Pending',
+      completed: 'Completed'
+    },
+    form: {
+      placeholder: 'Add item, e.g.: milk, bread, tomatoes...',
+      categoryLabel: 'Select store:',
+      customCategoryPlaceholder: 'Enter custom category name (e.g.: Hardware, Pharmacy)...',
+      customButton: 'Custom'
+    },
+    categories: {
+      western: 'Western Market',
+      asian: 'Asian Market',
+      gas: 'Gas Station'
+    },
+    list: {
+      pendingTitle: 'Pending',
+      completedTitle: 'Completed',
+      clearCompleted: 'Clear Completed Items',
+      emptyTitle: 'Shopping list is empty',
+      emptyMessage: 'Add items you need to buy!'
+    },
+    time: {
+      justNow: 'Just now',
+      minutesAgo: (minutes) => `${minutes} min${minutes > 1 ? 's' : ''} ago`,
+      hoursAgo: (hours) => `${hours} hour${hours > 1 ? 's' : ''} ago`,
+      daysAgo: (days) => `${days} day${days > 1 ? 's' : ''} ago`
+    },
+    footer: {
+      message: 'Data automatically saved to local storage'
+    }
+  }
+}
+
 // 预设类别列表
 const PRESET_CATEGORIES = [
-  { id: 'western', name: '洋人超市', color: 'blue' },
-  { id: 'asian', name: '华人超市', color: 'red' },
-  { id: 'gas', name: '加油站', color: 'green' }
+  { id: 'western', name: '洋人超市', nameEn: 'Western Market', color: 'blue' },
+  { id: 'asian', name: '华人超市', nameEn: 'Asian Market', color: 'red' },
+  { id: 'gas', name: '加油站', nameEn: 'Gas Station', color: 'green' }
 ] as const
+
+// 获取类别名称（支持中英文）
+function getCategoryName(category: { id: string, name: string, nameEn: string }, lang: Language): string {
+  return lang === 'zh' ? category.name : category.nameEn
+}
 
 // 预设类别的颜色样式
 function getPresetCategoryColor(categoryName: string): string {
-  const categoryInfo = PRESET_CATEGORIES.find(c => c.name === categoryName)
+  const categoryInfo = PRESET_CATEGORIES.find(c => c.name === categoryName || c.nameEn === categoryName)
   if (categoryInfo) {
     switch (categoryInfo.color) {
       case 'blue': return 'blue'
@@ -31,10 +158,10 @@ function getPresetCategoryColor(categoryName: string): string {
   return 'gray'
 }
 
-// 获取类别的颜色样式
+// 获取类别的颜色样式（支持中英文类别名）
 function getCategoryColorStyle(category: string, isSelected: boolean = false): string {
-  const presetCategory = PRESET_CATEGORIES.find(c => c.name === category)
-  
+  const presetCategory = PRESET_CATEGORIES.find(c => c.name === category || c.nameEn === category)
+
   if (presetCategory) {
     switch (presetCategory.color) {
       case 'blue':
@@ -45,15 +172,15 @@ function getCategoryColorStyle(category: string, isSelected: boolean = false): s
         return isSelected ? 'bg-green-500 text-white border-green-500' : 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100'
     }
   }
-  
+
   // 自定义类别颜色（使用橙色/amber作为默认颜色）
   return isSelected ? 'bg-orange-500 text-white border-orange-500' : 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100'
 }
 
-// 获取类别的指示点颜色
+// 获取类别的指示点颜色（支持中英文类别名）
 function getCategoryDotColor(category: string): string {
-  const presetCategory = PRESET_CATEGORIES.find(c => c.name === category)
-  
+  const presetCategory = PRESET_CATEGORIES.find(c => c.name === category || c.nameEn === category)
+
   if (presetCategory) {
     switch (presetCategory.color) {
       case 'blue': return 'bg-blue-500'
@@ -61,27 +188,27 @@ function getCategoryDotColor(category: string): string {
       case 'green': return 'bg-green-500'
     }
   }
-  
+
   // 自定义类别使用橙色
   return 'bg-orange-500'
 }
 
 // 格式化时间显示
-function formatTime(timestamp: number): string {
+function formatTime(timestamp: number, t: Translations['time']): string {
   const now = Date.now()
   const diff = now - timestamp
-  
+
   if (diff < 60000) {
-    return '刚刚'
+    return t.justNow
   } else if (diff < 3600000) {
     const minutes = Math.floor(diff / 60000)
-    return `${minutes}分钟前`
+    return t.minutesAgo(minutes)
   } else if (diff < 86400000) {
     const hours = Math.floor(diff / 3600000)
-    return `${hours}小时前`
+    return t.hoursAgo(hours)
   } else {
     const days = Math.floor(diff / 86400000)
-    return `${days}天前`
+    return t.daysAgo(days)
   }
 }
 
@@ -100,12 +227,17 @@ function App() {
   const [customCategoryName, setCustomCategoryName] = useState('')
   const [isAddingCustom, setIsAddingCustom] = useState(false)
   const [isLoaded, setIsLoaded] = useState(false)
+  const [language, setLanguage] = useState<Language>('zh')
+
+  // 获取当前语言的翻译
+  const t = translations[language]
 
   // 从localStorage加载数据
   useEffect(() => {
     const savedItems = localStorage.getItem('grocery-items')
     const savedCustomCategories = localStorage.getItem('custom-categories')
-    
+    const savedLanguage = localStorage.getItem('language') as Language | null
+
     if (savedItems) {
       try {
         const parsedItems = JSON.parse(savedItems)
@@ -119,7 +251,7 @@ function App() {
         console.error('Failed to parse saved items:', e)
       }
     }
-    
+
     if (savedCustomCategories) {
       try {
         setCustomCategories(JSON.parse(savedCustomCategories))
@@ -127,7 +259,11 @@ function App() {
         console.error('Failed to parse custom categories:', e)
       }
     }
-    
+
+    if (savedLanguage && (savedLanguage === 'zh' || savedLanguage === 'en')) {
+      setLanguage(savedLanguage)
+    }
+
     setIsLoaded(true)
   }, [])
 
@@ -136,22 +272,36 @@ function App() {
     if (isLoaded) {
       localStorage.setItem('grocery-items', JSON.stringify(items))
       localStorage.setItem('custom-categories', JSON.stringify(customCategories))
+      localStorage.setItem('language', language)
     }
-  }, [items, customCategories, isLoaded])
+  }, [items, customCategories, language, isLoaded])
+
+  // 切换语言
+  const toggleLanguage = () => {
+    setLanguage(prev => prev === 'zh' ? 'en' : 'zh')
+    // 同时更新当前选中的类别为对应语言的名称
+    const currentPreset = PRESET_CATEGORIES.find(c =>
+      c.name === selectedCategory || c.nameEn === selectedCategory
+    )
+    if (currentPreset) {
+      setSelectedCategory(language === 'zh' ? currentPreset.nameEn : currentPreset.name)
+    }
+  }
+
 
   // 添加新项目
   const addItem = (e: React.FormEvent) => {
     e.preventDefault()
     const trimmedValue = inputValue.trim()
-    
+
     if (!trimmedValue) return
 
     // 确定最终类别
     let finalCategory = selectedCategory
-    
+
     if (selectedCategory === '自定义' && customCategoryName.trim()) {
       finalCategory = customCategoryName.trim()
-      
+
       // 如果是新的自定义类别，添加到列表中
       if (!customCategories.includes(finalCategory)) {
         setCustomCategories(prev => [...prev, finalCategory])
@@ -169,7 +319,7 @@ function App() {
 
     setItems(prev => [newItem, ...prev])
     setInputValue('')
-    
+
     // 如果是自定义类别，添加后重置状态
     if (selectedCategory === '自定义') {
       setCustomCategoryName('')
@@ -181,9 +331,9 @@ function App() {
 
   // 切换项目完成状态
   const toggleItem = (id: string) => {
-    setItems(prev => 
-      prev.map(item => 
-        item.id === id 
+    setItems(prev =>
+      prev.map(item =>
+        item.id === id
           ? { ...item, completed: !item.completed, updatedAt: Date.now() }
           : item
       )
@@ -241,7 +391,7 @@ function App() {
 
   // 类别显示顺序：预设类别 + 自定义类别列表
   const presetCategoryOrder = ['洋人超市', '华人超市', '加油站']
-  
+
   // 获取排序后的类别列表
   const getSortedCategories = (groupedItems: Record<string, GroceryItem[]>) => {
     const categories = Object.keys(groupedItems)
@@ -261,29 +411,39 @@ function App() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-green-50 to-teal-100">
       <div className="max-w-md mx-auto px-4 py-8">
-        
+
         {/* 头部标题 */}
-        <header className="text-center mb-8">
+        <header className="text-center mb-8 relative">
+          {/* 语言切换按钮 */}
+          <button
+            onClick={toggleLanguage}
+            className="absolute top-0 right-0 p-2 text-gray-600 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors flex items-center gap-1"
+            aria-label="Toggle language"
+          >
+            <Globe className="w-5 h-5" />
+            <span className="text-sm font-medium">{language === 'zh' ? 'EN' : '中'}</span>
+          </button>
+
           <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-500 rounded-full shadow-lg mb-4">
             <ShoppingCart className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">家庭购物清单</h1>
-          <p className="text-gray-500">管理您的日常购物需求</p>
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">{t.header.title}</h1>
+          <p className="text-gray-500">{t.header.subtitle}</p>
         </header>
 
         {/* 统计信息 */}
         <div className="bg-white rounded-xl shadow-md p-4 mb-6 flex justify-around">
           <div className="text-center">
             <div className="text-2xl font-bold text-emerald-600">{totalItems}</div>
-            <div className="text-xs text-gray-500">总项目</div>
+            <div className="text-xs text-gray-500">{t.stats.total}</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-orange-500">{pendingItems}</div>
-            <div className="text-xs text-gray-500">待购买</div>
+            <div className="text-xs text-gray-500">{t.stats.pending}</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-green-500">{completedItems}</div>
-            <div className="text-xs text-gray-500">已完成</div>
+            <div className="text-xs text-gray-500">{t.stats.completed}</div>
           </div>
         </div>
 
@@ -294,7 +454,7 @@ function App() {
               type="text"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              placeholder="添加购物项目，例如：牛奶、面包、西红柿..."
+              placeholder={t.form.placeholder}
               className="flex-1 px-4 py-3 rounded-xl border-2 border-emerald-200 focus:border-emerald-500 focus:outline-none transition-colors bg-white shadow-sm text-gray-700 placeholder-gray-400"
             />
             <button
@@ -305,12 +465,12 @@ function App() {
               <Plus className="w-5 h-5" />
             </button>
           </div>
-          
+
           {/* 预设类别选择器 */}
           <div className="mb-2">
             <div className="flex items-center mb-2 text-xs text-gray-500">
               <Tag className="w-3 h-3 mr-1" />
-              选择购买地点：
+              {t.form.categoryLabel}
             </div>
             <div className="flex flex-wrap gap-2">
               {PRESET_CATEGORIES.map((category) => (
@@ -318,19 +478,18 @@ function App() {
                   key={category.id}
                   type="button"
                   onClick={() => {
-                    setSelectedCategory(category.name)
+                    setSelectedCategory(getCategoryName(category, language))
                     setIsAddingCustom(false)
                   }}
-                  className={`px-3 py-1.5 rounded-full text-sm font-medium border-2 transition-all duration-200 ${
-                    selectedCategory === category.name
-                      ? getCategoryColorStyle(category.name, true)
-                      : getCategoryColorStyle(category.name, false)
-                  }`}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium border-2 transition-all duration-200 ${selectedCategory === getCategoryName(category, language)
+                    ? getCategoryColorStyle(getCategoryName(category, language), true)
+                    : getCategoryColorStyle(getCategoryName(category, language), false)
+                    }`}
                 >
-                  {category.name}
+                  {getCategoryName(category, language)}
                 </button>
               ))}
-              
+
               {/* 已创建的自定义类别 */}
               {customCategories.map((categoryName) => (
                 <button
@@ -340,11 +499,10 @@ function App() {
                     setSelectedCategory(categoryName)
                     setIsAddingCustom(false)
                   }}
-                  className={`px-3 py-1.5 rounded-full text-sm font-medium border-2 transition-all duration-200 group relative ${
-                    selectedCategory === categoryName
-                      ? getCategoryColorStyle(categoryName, true)
-                      : getCategoryColorStyle(categoryName, false)
-                  }`}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium border-2 transition-all duration-200 group relative ${selectedCategory === categoryName
+                    ? getCategoryColorStyle(categoryName, true)
+                    : getCategoryColorStyle(categoryName, false)
+                    }`}
                 >
                   {categoryName}
                   {/* 删除自定义类别按钮 */}
@@ -357,7 +515,7 @@ function App() {
                   </button>
                 </button>
               ))}
-              
+
               {/* 添加自定义类别按钮 */}
               {!isAddingCustom ? (
                 <button
@@ -369,30 +527,30 @@ function App() {
                   className="px-3 py-1.5 rounded-full text-sm font-medium border-2 border-dashed border-purple-300 text-purple-600 hover:bg-purple-50 hover:border-purple-400 transition-all duration-200 flex items-center"
                 >
                   <PlusCircle className="w-4 h-4 mr-1" />
-                  自定义
+                  {t.form.customButton}
                 </button>
               ) : (
                 <button
                   type="button"
                   onClick={() => {
                     setIsAddingCustom(false)
-                    setSelectedCategory('洋人超市')
+                    setSelectedCategory(getCategoryName(PRESET_CATEGORIES[0], language))
                   }}
                   className="px-3 py-1.5 rounded-full text-sm font-medium border-2 border-purple-500 bg-purple-500 text-white transition-all duration-200"
                 >
-                  自定义
+                  {t.form.customButton}
                 </button>
               )}
             </div>
           </div>
-          
+
           {/* 自定义类别输入框 */}
           {isAddingCustom && (
             <input
               type="text"
               value={customCategoryName}
               onChange={(e) => setCustomCategoryName(e.target.value)}
-              placeholder="请输入自定义类别名称（如：五金店、药店）..."
+              placeholder={t.form.customCategoryPlaceholder}
               className="w-full px-4 py-2 rounded-lg border-2 border-purple-300 focus:border-purple-500 focus:outline-none transition-colors bg-white shadow-sm text-gray-700 placeholder-gray-400 text-sm mt-2"
             />
           )}
@@ -400,14 +558,14 @@ function App() {
 
         {/* 购物清单 */}
         <div className="space-y-6">
-          
+
           {/* 待购买项目 - 按类别分组 */}
           {Object.keys(groupedPendingItems).length > 0 && (
             <div>
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 px-1">
-                待购买 ({pendingItemsList.length})
+                {t.list.pendingTitle} ({pendingItemsList.length})
               </h2>
-              
+
               {getSortedCategories(groupedPendingItems).map((category) => (
                 <div key={category} className="mb-4">
                   {/* 类别标题 */}
@@ -420,7 +578,7 @@ function App() {
                       {groupedPendingItems[category].length}
                     </span>
                   </div>
-                  
+
                   {/* 该类别下的项目列表 */}
                   <div className="space-y-2">
                     {groupedPendingItems[category].map((item) => (
@@ -436,18 +594,17 @@ function App() {
                           >
                             <div className="w-3 h-3 rounded-full bg-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity" />
                           </button>
-                          
+
                           {/* 项目名称 */}
                           <span className="flex-1 text-gray-700 font-medium text-lg">
                             {item.name}
                           </span>
-                          
-                          {/* 时间显示 */}
+
                           <div className="flex items-center text-gray-400 text-xs mr-2">
                             <Clock className="w-3 h-3 mr-1" />
-                            {formatTime(item.updatedAt)}
+                            {formatTime(item.updatedAt, t.time)}
                           </div>
-                          
+
                           {/* 删除按钮 */}
                           <button
                             onClick={() => deleteItem(item.id)}
@@ -468,9 +625,9 @@ function App() {
           {Object.keys(groupedCompletedItems).length > 0 && (
             <div>
               <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 px-1">
-                已完成 ({completedItemsList.length})
+                {t.list.completedTitle} ({completedItemsList.length})
               </h2>
-              
+
               {getSortedCategories(groupedCompletedItems).map((category) => (
                 <div key={category} className="mb-4">
                   {/* 类别标题 */}
@@ -483,7 +640,7 @@ function App() {
                       {groupedCompletedItems[category].length}
                     </span>
                   </div>
-                  
+
                   {/* 该类别下的已完成项目列表 */}
                   <div className="space-y-2">
                     {groupedCompletedItems[category].map((item) => (
@@ -499,18 +656,17 @@ function App() {
                           >
                             <Check className="w-4 h-4 text-white" />
                           </button>
-                          
+
                           {/* 项目名称（划线状态） */}
                           <span className="flex-1 text-gray-400 font-medium text-lg line-through">
                             {item.name}
                           </span>
-                          
-                          {/* 时间显示 */}
+
                           <div className="flex items-center text-gray-400 text-xs mr-2">
                             <Clock className="w-3 h-3 mr-1" />
-                            {formatTime(item.updatedAt)}
+                            {formatTime(item.updatedAt, t.time)}
                           </div>
-                          
+
                           {/* 删除按钮 */}
                           <button
                             onClick={() => deleteItem(item.id)}
@@ -533,8 +689,8 @@ function App() {
               <div className="inline-flex items-center justify-center w-20 h-20 bg-gray-100 rounded-full mb-4">
                 <ShoppingCart className="w-10 h-10 text-gray-400" />
               </div>
-              <h3 className="text-gray-600 font-medium mb-2">购物清单为空</h3>
-              <p className="text-gray-400 text-sm">添加您需要购买的物品吧！</p>
+              <h3 className="text-gray-600 font-medium mb-2">{t.list.emptyTitle}</h3>
+              <p className="text-gray-400 text-sm">{t.list.emptyMessage}</p>
             </div>
           )}
         </div>
@@ -545,13 +701,13 @@ function App() {
             onClick={clearCompleted}
             className="w-full mt-6 py-3 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors text-sm font-medium"
           >
-            清除已完成项目
+            {t.list.clearCompleted}
           </button>
         )}
 
         {/* 底部提示 */}
         <footer className="text-center mt-8 text-gray-400 text-sm">
-          <p>数据自动保存至本地存储</p>
+          <p>{t.footer.message}</p>
         </footer>
       </div>
     </div>
